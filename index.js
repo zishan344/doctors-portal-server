@@ -44,6 +44,38 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
+
+    //warning:
+    // This is not the proper way to query
+    // After learning more about mongodb. use aggregate lookup, pipeline, match, group
+    //available slots
+    app.get("/available", async (req, res) => {
+      const date = req.query.date;
+      // step 1 get all services
+      const services = await serviceCollection.find().toArray();
+      // step 2 get the booking of the day
+      const query = { date: date };
+      const bookings = await bookingCollection.find(query).toArray();
+      // step 3:for each service find booking for that service
+      services.forEach((service) => {
+        // step 4 find the booking get service
+        const serviceBookings = bookings.filter(
+          (b) => b.treatment === service.name
+        );
+        // step 5: select slots for the service Booking
+        const bookedSlots = serviceBookings.map((book) => book.slot);
+        // service.booked=serviceBookings.map(s=>s.slot)
+
+        // step 6: select those slots that are not in bookSlots
+        const available = service.slots.filter(
+          (slot) => !bookedSlots.includes(slot)
+        );
+        //step 7 set available to slots to make it easier
+        service.slots = available;
+      });
+
+      res.send(services);
+    });
   } finally {
   }
 }
