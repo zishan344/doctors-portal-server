@@ -1,6 +1,8 @@
 const express = require("express");
 const app = express();
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
+
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const port = process.env.PORT || 5000;
 require("dotenv").config();
@@ -24,6 +26,7 @@ async function run() {
     const bookingCollection = client
       .db("doctors_service")
       .collection("booking ");
+    const userCollection = client.db("doctors_service").collection("users");
     app.post("/booking", async (req, res) => {
       const booking = req.body;
       const query = {
@@ -75,6 +78,34 @@ async function run() {
       });
 
       res.send(services);
+    });
+    app.get("/availableAppointments", async (req, res) => {
+      const authorization = req.headers.authorization;
+      console.log(authorization);
+      const user = { patient: req.query.patient };
+      // step 1 get all services
+      const availableAppointments = await bookingCollection
+        .find(user)
+        .toArray();
+      res.send(availableAppointments);
+    });
+
+    // user collection
+    app.put("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = req.body;
+      const filter = { email: email };
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: user,
+      };
+      const result = await userCollection.updateOne(filter, updateDoc, options);
+      const token = jwt.sign(
+        { email: email },
+        process.env.ACCESS_TOKEN_SECRET,
+        { expiresIn: "1d" }
+      );
+      res.send({ result, token });
     });
   } finally {
   }
