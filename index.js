@@ -27,6 +27,24 @@ async function run() {
       .db("doctors_service")
       .collection("booking ");
     const userCollection = client.db("doctors_service").collection("users");
+    function verifyJwt(req, res, next) {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).send({ message: "UnAuthorized access" });
+      }
+      const token = authHeader.split(" ")[1];
+      jwt.verify(
+        token,
+        process.env.ACCESS_TOKEN_SECRET,
+        function (err, decoded) {
+          if (err) {
+            return res.status(403).send({ message: "forbidden access" });
+          }
+          req.decoded = decoded;
+          next();
+        }
+      );
+    }
     app.post("/booking", async (req, res) => {
       const booking = req.body;
       const query = {
@@ -79,15 +97,32 @@ async function run() {
 
       res.send(services);
     });
-    app.get("/availableAppointments", async (req, res) => {
-      const authorization = req.headers.authorization;
-      console.log(authorization);
-      const user = { patient: req.query.patient };
-      // step 1 get all services
-      const availableAppointments = await bookingCollection
-        .find(user)
-        .toArray();
-      res.send(availableAppointments);
+    app.get("/availableAppointments", verifyJwt, async (req, res) => {
+      const patient = req.query.patient;
+      const decodedEmail = req.decoded.email;
+      if (patient === decodedEmail) {
+        const query = { patient: patient };
+        const availableAppointments = await bookingCollection
+          .find(query)
+          .toArray();
+        return res.send(availableAppointments);
+      } else {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+    });
+
+    app.get("/user", verifyJwt, async (req, res) => {
+      const user = await userCollection.find().toArray();
+      res.send(user);
+    });
+    app.put("/users/admin/:email", verifyJwt, async (req, res) => {
+      const email = req.params.email;
+      const filter = { email: email };
+      const updateDoc = {
+        $set: { role: "Admin" },
+      };
+      const result = await userCollection.updateOne(filter, updateDoc);
+      res.send(result);
     });
 
     // user collection
