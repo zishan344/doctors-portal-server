@@ -27,6 +27,7 @@ async function run() {
       .db("doctors_service")
       .collection("booking ");
     const userCollection = client.db("doctors_service").collection("users");
+    const doctorCollection = client.db("doctors_service").collection("doctor");
     function verifyJwt(req, res, next) {
       const authHeader = req.headers.authorization;
       if (!authHeader) {
@@ -45,6 +46,19 @@ async function run() {
         }
       );
     }
+
+    const verifyAdmin = async (req, res, next) => {
+      const requester = req.decoded.email;
+      const requesterAccount = await userCollection.findOne({
+        email: requester,
+      });
+      if (requesterAccount.role === "Admin") {
+        next();
+      } else {
+        res.status(403).send({ message: "Forbidden" });
+      }
+    };
+
     app.post("/booking", async (req, res) => {
       const booking = req.body;
       const query = {
@@ -61,7 +75,7 @@ async function run() {
     });
     app.get("/services", async (req, res) => {
       const query = {};
-      const cursor = serviceCollection.find(query);
+      const cursor = serviceCollection.find(query).project({ name: 1 });
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -123,22 +137,14 @@ async function run() {
       res.send({ admin: isAdmin });
     });
 
-    app.put("/users/admin/:email", verifyJwt, async (req, res) => {
+    app.put("/users/admin/:email", verifyJwt, verifyAdmin, async (req, res) => {
       const email = req.params.email;
-      const requester = req.decoded.email;
-      const requesterAccount = await userCollection.findOne({
-        email: requester,
-      });
-      if (requesterAccount.role === "Admin") {
-        const filter = { email: email };
-        const updateDoc = {
-          $set: { role: "Admin" },
-        };
-        const result = await userCollection.updateOne(filter, updateDoc);
-        res.send(result);
-      } else {
-        res.status(403).send({ message: "forbidden" });
-      }
+      const filter = { email: email };
+      const updateDoc = {
+        $set: { role: "Admin" },
+      };
+      const result = await userCollection.updateOne(filter, updateDoc);
+      res.send(result);
     });
 
     // user collection
@@ -157,6 +163,22 @@ async function run() {
         { expiresIn: "1d" }
       );
       res.send({ result, token });
+    });
+
+    app.post("/doctor", verifyJwt, verifyAdmin, async (req, res) => {
+      const doctor = req.body;
+      const result = await doctorCollection.insertOne(doctor);
+      res.send(result);
+    });
+    app.get("/doctors", verifyJwt, verifyAdmin, async (req, res) => {
+      const doctors = await doctorCollection.find().toArray();
+      res.send(doctors);
+    });
+    app.delete("/doctor/:email", verifyJwt, verifyAdmin, async (req, res) => {
+      const email = req.params.email;
+      const filter = { email: email };
+      const doctors = await doctorCollection.deleteOne(filter);
+      res.send(doctors);
     });
   } finally {
   }
