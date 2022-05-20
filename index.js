@@ -28,6 +28,9 @@ async function run() {
       .collection("booking ");
     const userCollection = client.db("doctors_service").collection("users");
     const doctorCollection = client.db("doctors_service").collection("doctor");
+    const paymentCollection = client
+      .db("doctors_service")
+      .collection("payments");
     function verifyJwt(req, res, next) {
       const authHeader = req.headers.authorization;
       if (!authHeader) {
@@ -182,6 +185,25 @@ async function run() {
         { expiresIn: "1d" }
       );
       res.send({ result, token });
+    });
+
+    app.patch("/booking/:id", verifyJwt, async (req, res) => {
+      const id = req.params.id;
+      const payment = req.body;
+      const filter = { _id: ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          paid: true,
+          transactionId: payment.transactionId,
+        },
+      };
+
+      const result = await paymentCollection.insertOne(payment);
+      const updatedBooking = await bookingCollection.updateOne(
+        filter,
+        updatedDoc
+      );
+      res.send(updatedBooking);
     });
 
     app.post("/doctor", verifyJwt, verifyAdmin, async (req, res) => {
